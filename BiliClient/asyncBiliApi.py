@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 from aiohttp import ClientSession
+import time
 
 class asyncBiliApi(object):
     '''B站异步接口类'''
@@ -89,6 +90,129 @@ class asyncBiliApi(object):
         self._coin = ret["data"]["money"]
         self._exp = ret["data"]["level_info"]["current_exp"]
 
+    async def getFollowings(self, 
+                            uid: int = None, 
+                            pn: int = 1, 
+                            ps: int = 50, 
+                            order: str = 'desc', 
+                            order_type: str = 'attention'
+                            ) -> dict:
+        '''
+        获取指定用户关注的up主
+        uid int 账户uid，默认为本账户，非登录账户只能获取20个*5页
+        pn int 页码，默认第一页
+        ps int 每页数量，默认50
+        order str 排序方式，默认desc
+        order_type 排序类型，默认attention
+        '''
+        if not uid:
+            uid = self._uid
+        url = f'https://api.bilibili.com/x/relation/followings?vmid={uid}&pn={pn}&ps={ps}&order={order}&order_type={order_type}'
+        async with self._session.get(url, verify_ssl=False) as r:
+            ret = await r.json()
+        return ret
+
+    async def spaceArticle(self, 
+                            uid: int = None,
+                            pn: int = 1, 
+                            ps: int = 30, 
+                            sort: str = 'publish_time', 
+                            ) -> dict:
+        '''
+        获取指定up主空间专栏投稿信息
+        uid int 账户uid，默认为本账户
+        pn int 页码，默认第一页
+        ps int 每页数量，默认50
+        sort str 排序方式，默认publish_time
+        '''
+        if not uid:
+            uid = self._uid
+        url = f'https://api.bilibili.com/x/space/article?mid={uid}&pn={pn}&ps={ps}&sort={sort}'
+        async with self._session.get(url, verify_ssl=False) as r:
+            ret = await r.json()
+        return ret
+
+    async def spaceArcSearch(self, 
+                          uid: int = None,
+                          pn: int = 1, 
+                          ps: int = 100, 
+                          tid: int = 0,
+                          order: str = 'pubdate', 
+                          keyword: str = ''
+                          ) -> dict:
+        '''
+        获取指定up主空间视频投稿信息
+        uid int 账户uid，默认为本账户
+        pn int 页码，默认第一页
+        ps int 每页数量，默认50
+        tid int 分区 默认为0(所有分区)
+        order str 排序方式，默认pubdate
+        keyword str 关键字，默认为空
+        '''
+        if not uid:
+            uid = self._uid
+        url = f'https://api.bilibili.com/x/space/arc/search?mid={uid}&pn={pn}&ps={ps}&tid={tid}&order={order}&keyword={keyword}'
+        async with self._session.get(url, verify_ssl=False) as r:
+            ret = await r.json()
+        return ret
+
+    async def search(self, 
+                     keyword: str = '',
+                     context: str = '',
+                     page: int = 1,
+                     tids: int = 0,
+                     order: str = '', 
+                     duration: int = 0,
+                     search_type: str = 'video'
+                     ) -> dict:
+        '''
+        获取指定视频投稿信息
+        keyword str 关键字
+        context str 未知
+        page int 页码，默认第一页
+        tids int 分区 默认为0(所有分区)
+        order str 排序方式，默认为空(综合排序)
+        duration int 时长过滤，默认0(所有时长)
+        search_type str 搜索类型，默认video(视频)
+        '''
+        params = {
+            "keyword": keyword,
+            "context": context,
+            "page": page,
+            "tids": tids,
+            "order": order,
+            "duration": duration,
+            "search_type": search_type,
+            "single_column": 0,
+            "__refresh__": "true",
+            "tids_2": '',
+            "_extra": ''
+            }
+        url = 'https://api.bilibili.com/x/web-interface/search/type'
+        async with self._session.get(url, params=params, verify_ssl=False) as r:
+            ret = await r.json()
+        return ret
+
+    async def getRelationTags(self) -> dict:
+        '''取关注用户分组列表'''
+        url = "https://api.bilibili.com/x/relation/tags"
+        async with self._session.get(url, verify_ssl=False) as r:
+            ret = await r.json()
+        return ret
+
+    async def getRelation(self,
+                          tagid: int = 0,
+                          pn: int = 1,
+                          ps: int = 50
+                          )-> dict:
+        '''
+        取关注分组内up主列表
+        tagid int 分组id
+        '''
+        url = f"https://api.bilibili.com/x/relation/tag?tagid={tagid}&pn={pn}&ps={ps}"
+        async with self._session.get(url, verify_ssl=False) as r:
+            ret = await r.json()
+        return ret
 
     async def getWebNav(self) -> dict:
         '''取导航信息'''
@@ -277,10 +401,10 @@ class asyncBiliApi(object):
         return ret
 
     async def coin(self, 
-             aid: int, 
-             num=1, 
-             select_like=1
-             ) -> dict:
+                   aid: int, 
+                   num: int = 1, 
+                   select_like: int = 1
+                   ) -> dict:
         '''
         给指定av号视频投币
         aid int 视频av号
@@ -297,12 +421,151 @@ class asyncBiliApi(object):
             }
         async with self._session.post(url, data=post_data, verify_ssl=False) as r:
             ret = await r.json()
-        return aid, ret
+        return ret
+
+    async def coinCv(self,
+                    cvid: int, 
+                    num: int = 1, 
+                    upid: int = 0, 
+                    select_like: int = 1
+                    ) -> dict:
+        '''
+        给指定cv号专栏投币
+        cvid int 专栏id
+        num int 投币数量
+        upid int 专栏up主uid
+        select_like int 是否点赞
+        '''
+        url = "https://api.bilibili.com/x/web-interface/coin/add"
+        if upid == 0: #up主id不能为空，需要先请求一下专栏的up主
+            info = await self.articleViewInfo(cvid)
+            upid = info["data"]["mid"]
+        post_data = {
+            "aid": cvid,
+            "multiply": num,
+            "select_like": select_like,
+            "upid": upid,
+            "avtype": 2,#专栏必为2，否则投到视频上面去了
+            "csrf": self._bili_jct
+            }
+        async with self._session.post(url, data=post_data, verify_ssl=False) as r:
+            ret = await r.json()
+        return ret
+
+    async def articleViewInfo(self, 
+                              cvid: int
+                              ) -> dict:
+        '''
+        获取专栏信息
+        cvid int 专栏id
+        '''
+        url = f'https://api.bilibili.com/x/article/viewinfo?id={cvid}'
+        async with self._session.get(url, params=params, verify_ssl=False) as r:
+            ret = await r.json()
+        return ret
+
+    async def xliveWebHeartBeat(self, 
+                     hb: str = None, 
+                     pf: str = None
+                     ) -> dict:
+        '''
+        B站直播间心跳
+        hb str 请求信息(base64编码) "{周期}|{uid}|1|0"
+        pf str 平台 "web"
+        '''
+        params = {}
+        if hb:
+            params["hb"] = hb
+        if pf:
+            params["pf"] = pf
+        url = 'https://live-trace.bilibili.com/xlive/rdata-interface/v1/heartbeat/webHeartBeat'
+        async with self._session.get(url, params=params, verify_ssl=False) as r:
+            ret = await r.json()
+        return ret
+
+    async def xliveGetBuvid(self) -> str:
+        '''获得B站直播buvid参数'''
+        #先查找cookie
+        for x in self._session.cookie_jar:
+            if x.key == 'LIVE_BUVID':
+                return x.value
+        #cookie中找不到，则请求一次直播页面
+        url = 'https://live.bilibili.com/3'
+        async with self._session.head(url, verify_ssl=False) as r:
+            cookies = r.cookies['LIVE_BUVID']
+        return str(cookies)[23:43]
+
+    async def xliveHeartBeatX(self, 
+                     id: list, 
+                     device: list,
+                     ts: int,
+                     ets: int,
+                     benchmark: str,
+                     time: int,
+                     s: str
+                     ) -> dict:
+        '''
+        B站直播间内部心跳
+        id List[int] 整数数组[大分区,小分区,轮次,长位直播间]
+        device List[str] 字符串数组[bvuid, uuid]
+        ts int 时间戳
+        ets int 上次心跳时间戳timestamp
+        benchmark str 上次心跳秘钥secret_key
+        time int 上次心跳时间间隔
+        s str 加密字符串，由id, device, ets, ts, benchmark, time等参数计算出
+        '''
+        post_data = {
+            "id": f'[{id[0]},{id[1]},{id[2]},{id[3]}]',
+            "device": f'["{device[0]}","{device[1]}"]',
+            "ts": ts,
+            "ets": ets,
+            "benchmark": benchmark,
+            "time": time,
+            "ua": 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/63.0.3239.108',
+            "csrf_token": self._bili_jct,
+            "csrf": self._bili_jct,
+            "s": s
+            }
+        url = 'https://live-trace.bilibili.com/xlive/data-interface/v1/x25Kn/X'
+        async with self._session.post(url, data=post_data, verify_ssl=False) as r:
+            ret = await r.json()
+        return ret
+
+    async def xliveHeartBeatE(self, 
+                     id: list, 
+                     device: list
+                     ) -> dict:
+        '''
+        B站进入直播间心跳
+        id List[int] 整数数组[大分区,小分区,轮次,长位直播间]
+        device List[str] 字符串数组[bvuid, uuid]
+        '''
+        post_data = {
+            "id": f'[{id[0]},{id[1]},{id[2]},{id[3]}]',
+            "device": f'["{device[0]}","{device[1]}"]',
+            "ts": int(time.time() * 1000),
+            "is_patch": 0, 
+            "heart_beat": [], #短时间多次进入直播间，is_patch为1，heart_beat传入xliveHeartBeatX所需要的所有数据
+            "ua": 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/63.0.3239.108',
+            "csrf_token": self._bili_jct,
+            "csrf": self._bili_jct
+            }
+        url = 'https://live-trace.bilibili.com/xlive/data-interface/v1/x25Kn/E'
+        async with self._session.post(url, data=post_data, verify_ssl=False) as r:
+            ret = await r.json()
+        return ret
+
+    async def get_home_medals(self) -> dict:
+        '''获得佩戴的勋章'''
+        url = "https://api.live.bilibili.com/fans_medal/v1/fans_medal/get_home_medals"
+        async with self._session.get(url, verify_ssl=False) as r:
+            ret = await r.json()
+        return ret
 
     async def report(self, 
-                     aid, 
-                     cid, 
-                     progres
+                     aid: int, 
+                     cid: int, 
+                     progres: int
                      ) -> dict:
         '''
         B站上报视频观看进度
@@ -778,6 +1041,17 @@ class asyncBiliApi(object):
             ret = await r.json()
         return ret
 
+    async def juryCaseInfo(self,
+                           cid: int
+                           ) -> dict:
+        '''
+        获取风纪委员案件详细信息
+        '''
+        url = f'https://api.bilibili.com/x/credit/jury/caseInfo?cid={cid}'
+        async with self._session.get(url, verify_ssl=False) as r:
+            ret = await r.json()
+        return ret
+
     async def juryVote(self,
                        cid: int,
                        **kwargs #非必选参数太多以可变参数列表传入
@@ -837,6 +1111,18 @@ class asyncBiliApi(object):
             ret = await r.json()
         return ret
 
+    async def accInfo(self,
+                      uid: int
+                      ) -> None:
+        '''
+        获取指定用户的空间个人信息
+        uid int 用户uid
+        '''
+        url = f'https://api.bilibili.com/x/space/acc/info?mid={uid}'
+        async with self._session.get(url, verify_ssl=False) as r:
+            ret = await r.json()
+        return ret
+
     async def __aenter__(self):
         return self
 
@@ -845,3 +1131,5 @@ class asyncBiliApi(object):
 
     async def close(self) -> None:
         await self._session.close()
+
+
