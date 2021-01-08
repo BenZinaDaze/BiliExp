@@ -1,11 +1,12 @@
 # -*- coding: utf-8 -*-
-import asyncio, json, time, logging, sys, re, io
+import asyncio, time, logging, sys, io, os
 from collections import OrderedDict
 from getopt import getopt
 from BiliClient import asyncbili
 import tasks
+from json5 import loads
 
-main_version = (1, 1, 8)
+main_version = (1, 1, 9)
 main_version_str = '.'.join(map(str, main_version))
 
 def version_compare(version: str):
@@ -22,9 +23,9 @@ def initlog(log_file: str, log_console: bool, msg_raw: bool = False):
     formatter1 = logging.Formatter("[%(levelname)s]: %(message)s")
     if log_file:
         try:
-             file_handler = logging.FileHandler(log_file, encoding='utf-8')#输出到日志文件
-             file_handler.setFormatter(formatter1)
-             logger_raw.addHandler(file_handler)
+            file_handler = logging.FileHandler(log_file, encoding='utf-8')#输出到日志文件
+            file_handler.setFormatter(formatter1)
+            logger_raw.addHandler(file_handler)
         except:
             ...
     if log_console:
@@ -53,6 +54,18 @@ def init_message(configData: dict):
             tasks.webhook.addMsgStream('msg_simple')
     else:
         initlog(configData["log_file"], configData["log_console"])
+
+def load_config(path: str) -> OrderedDict:
+    '''加载配置文件'''
+    if path:
+        with open(path,'r',encoding='utf-8') as fp:
+            return loads(fp.read(), object_pairs_hook=OrderedDict)
+    else:
+        for path in ('./config/config.json', './config.json', '/etc/BiliExp/config.json'):
+            if os.path.exists(path):
+                with open(path,'r',encoding='utf-8') as fp:
+                    return loads(fp.read(), object_pairs_hook=OrderedDict)
+        raise RuntimeError('未找到配置文件')
 
 async def start(configData: dict):
     '''开始任务'''
@@ -110,13 +123,8 @@ async def run_user_tasks(user: dict,           #用户配置
             await asyncio.wait(task_array)        #异步等待所有任务完成
 
 def main(*args, **kwargs):
-    if 'config' in kwargs:
-        config = kwargs["config"]
-    else:
-        config = './config/config.json'
     try:
-        with open(config,'r',encoding='utf-8') as fp:
-            configData: dict = json.loads(re.sub(r'\/\*[\s\S]*?\*\/', '', fp.read()), object_pairs_hook=OrderedDict)
+        configData = load_config(kwargs.get("config", None))
     except Exception as e: 
         print(f'配置加载异常，原因为{str(e)}，退出程序')
         sys.exit(6)
